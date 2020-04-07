@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Simply-Bits/msgraph"
+	"github.com/jjcinaz/msgraph"
 )
 
 func main() {
