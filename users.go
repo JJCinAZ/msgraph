@@ -12,42 +12,42 @@ import (
 )
 
 type User struct {
-	AboutMe                     string   `json:"aboutMe"`
+	AboutMe                     string   `json:"aboutMe,omitempty"`
 	AccountEnabled              bool     `json:"accountEnabled"`
-	Birthday                    string   `json:"birthday"`
-	BusinessPhones              []string `json:"businessPhones"`
-	City                        string   `json:"city"`
-	CompanyName                 string   `json:"companyName"`
-	Country                     string   `json:"country"`
-	Department                  string   `json:"department"`
-	DisplayName                 string   `json:"displayName"`
-	EmployeeID                  string   `json:"employeeId"`
-	FaxNumber                   string   `json:"faxNumber"`
-	GivenName                   string   `json:"givenName"`
-	HireDate                    string   `json:"hireDate"`
+	Birthday                    string   `json:"birthday,omitempty"`
+	BusinessPhones              []string `json:"businessPhones,omitempty"`
+	City                        string   `json:"city,omitempty"`
+	CompanyName                 string   `json:"companyName,omitempty"`
+	Country                     string   `json:"country,omitempty"`
+	Department                  string   `json:"department,omitempty"`
+	DisplayName                 string   `json:"displayName,omitempty"`
+	EmployeeID                  string   `json:"employeeId,omitempty"`
+	FaxNumber                   string   `json:"faxNumber,omitempty"`
+	GivenName                   string   `json:"givenName,omitempty"`
+	HireDate                    string   `json:"hireDate,omitempty"`
 	ID                          string   `json:"id"`
 	IsResourceAccount           bool     `json:"isResourceAccount"`
-	JobTitle                    string   `json:"jobTitle"`
-	LastPasswordChangeDateTime  string   `json:"lastPasswordChangeDateTime"`
-	Mail                        string   `json:"mail"`
-	MailNickname                string   `json:"mailNickname"`
-	MobilePhone                 string   `json:"mobilePhone"`
-	OfficeLocation              string   `json:"officeLocation"`
-	OnPremisesDistinguishedName string   `json:"onPremisesDistinguishedName"`
-	OnPremisesDomainName        string   `json:"onPremisesDomainName"`
-	OnPremisesImmutableID       string   `json:"onPremisesImmutableId"`
-	OnPremisesLastSyncDateTime  string   `json:"onPremisesLastSyncDateTime"`
-	OnPremisesSamAccountName    string   `json:"onPremisesSamAccountName"`
-	OnPremisesSyncEnabled       bool     `json:"onPremisesSyncEnabled"`
-	OnPremisesUserPrincipalName string   `json:"onPremisesUserPrincipalName"`
-	PostalCode                  string   `json:"postalCode"`
-	PreferredDataLocation       string   `json:"preferredDataLocation"`
-	PreferredLanguage           string   `json:"preferredLanguage"`
-	ProxyAddresses              []string `json:"proxyAddresses"`
+	JobTitle                    string   `json:"jobTitle,omitempty"`
+	LastPasswordChangeDateTime  string   `json:"lastPasswordChangeDateTime,omitempty"`
+	Mail                        string   `json:"mail,omitempty"`
+	MailNickname                string   `json:"mailNickname,omitempty"`
+	MobilePhone                 string   `json:"mobilePhone,omitempty"`
+	OfficeLocation              string   `json:"officeLocation,omitempty"`
+	OnPremisesDistinguishedName string   `json:"onPremisesDistinguishedName,omitempty"`
+	OnPremisesDomainName        string   `json:"onPremisesDomainName,omitempty"`
+	OnPremisesImmutableID       string   `json:"onPremisesImmutableId,omitempty"`
+	OnPremisesLastSyncDateTime  string   `json:"onPremisesLastSyncDateTime,omitempty"`
+	OnPremisesSamAccountName    string   `json:"onPremisesSamAccountName,omitempty"`
+	OnPremisesSyncEnabled       bool     `json:"onPremisesSyncEnabled,omitempty"`
+	OnPremisesUserPrincipalName string   `json:"onPremisesUserPrincipalName,omitempty"`
+	PostalCode                  string   `json:"postalCode,omitempty"`
+	PreferredDataLocation       string   `json:"preferredDataLocation,omitempty"`
+	PreferredLanguage           string   `json:"preferredLanguage,omitempty"`
+	ProxyAddresses              []string `json:"proxyAddresses,omitempty"`
 	ShowInAddressList           bool     `json:"showInAddressList"`
-	State                       string   `json:"state"`
-	StreetAddress               string   `json:"streetAddress"`
-	Surname                     string   `json:"surname"`
+	State                       string   `json:"state,omitempty"`
+	StreetAddress               string   `json:"streetAddress,omitempty"`
+	Surname                     string   `json:"surname,omitempty"`
 	UserPrincipalName           string   `json:"userPrincipalName"`
 }
 
@@ -108,7 +108,7 @@ func (c *Client) GetUserList() ([]User, error) {
 	// but that's expected Microsoft quality.  I'm sure they will replace the entire API
 	// with "something better" in a year anyway.  For now we have to manually filter.
 	users := make([]User, 0, 128)
-	c.executeGetList(apiUrl, func(body io.Reader) string {
+	c.executeGetList(apiUrl, nil, func(body io.Reader) string {
 		var (
 			reply struct {
 				Context  string `json:"@odata.context"`

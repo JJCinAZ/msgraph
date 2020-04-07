@@ -58,7 +58,11 @@ func (c *Client) getHttpClient(ctx context.Context) *http.Client {
 	return c.oauthConfig.Client(ctx)
 }
 
-func (c *Client) executeGetList(apiUrl string, parser func(io.Reader) string) error {
+// GetList is specialized in that we get back paged results from MSGraph API
+// We need to detect this and keep calling back for the next page.
+// This function wraps all that logic with the supplied parser controlling
+// and early stop or continuation by returning the NextLink parameter
+func (c *Client) executeGetList(apiUrl string, headers map[string]string, parser func(io.Reader) string) error {
 	for {
 		var (
 			req *http.Request
@@ -68,6 +72,11 @@ func (c *Client) executeGetList(apiUrl string, parser func(io.Reader) string) er
 		ctx, _ := context.WithTimeout(c.parentCtx, c.callTimeout)
 		httpClient := c.getHttpClient(ctx)
 		req, err = http.NewRequest("GET", apiUrl, nil)
+		if headers != nil {
+			for k, v := range headers {
+				req.Header.Add(k, v)
+			}
+		}
 		res, err = httpClient.Do(req)
 		if err != nil {
 			return err
@@ -105,54 +114,59 @@ func (c *Client) executeGetList(apiUrl string, parser func(io.Reader) string) er
 	return nil
 }
 
-func (c *Client) executeGetJson(apiUrl string, output interface{}) error {
+func (c *Client) executePost(apiUrl string, body interface{}, parser func(io.Reader) error) error {
 	ctx, _ := context.WithTimeout(c.parentCtx, c.callTimeout)
 	httpClient := c.getHttpClient(ctx)
-	req, err := http.NewRequest("GET", apiUrl, nil)
+	pr, pw := io.Pipe()
+	go func() {
+		_ = json.NewEncoder(pw).Encode(body)
+		pw.Close()
+	}()
+	req, err := http.NewRequest("POST", apiUrl, pr)
 	if err != nil {
 		return err
 	}
-	res, err := httpClient.Do(req)
-	if err != nil {
+	req.Header.Add("Content-Type", "application/json")
+	if res, err := httpClient.Do(req); err != nil {
 		return err
-	}
-	if c.apilog != nil && res.StatusCode == 200 {
-		// If we want API logging output, read the response body, print it, and recreate the buffer
-		// for the json decoder to consume
-		bodyBytes, _ := ioutil.ReadAll(res.Body)
-		_ = res.Body.Close() //  must close the original else we'll leak it
-		c.apilog.Print("<-- ")
-		c.apilog.Println(string(bodyBytes))
-		res.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-	}
-	defer res.Body.Close()
-	if res.StatusCode == 200 {
-		err = json.NewDecoder(res.Body).Decode(output)
 	} else {
-		var mserr msGraphError
-		if err = json.NewDecoder(res.Body).Decode(&mserr); err == nil {
-			return &MsGraphError{
-				HttpStatusCode: res.StatusCode,
-				HttpStatus:     res.Status,
-				Message:        mserr.Error.Message,
-			}
-		}
-		return errors.New(res.Status)
+		return c.executeProcessResult(res, parser)
 	}
-	return err
+}
+
+func (c *Client) executeGetJson(apiUrl string, output interface{}) error {
+	return c.executeMethod("GET", apiUrl,
+		func(reader io.Reader) error {
+			return json.NewDecoder(reader).Decode(output)
+		})
 }
 
 func (c *Client) executeGet(apiUrl string, parser func(io.Reader) error) error {
+	return c.executeMethod("GET", apiUrl, parser)
+}
+
+func (c *Client) executeDelete(apiUrl string) error {
+	return c.executeMethod("DELETE", apiUrl, func(reader io.Reader) error {
+		return nil
+	})
+}
+
+func (c *Client) executeMethod(method string, apiUrl string, parser func(io.Reader) error) error {
 	ctx, _ := context.WithTimeout(c.parentCtx, c.callTimeout)
 	httpClient := c.getHttpClient(ctx)
-	req, err := http.NewRequest("GET", apiUrl, nil)
+	req, err := http.NewRequest(method, apiUrl, nil)
 	if err != nil {
 		return err
 	}
-	res, err := httpClient.Do(req)
-	if err != nil {
+	if res, err := httpClient.Do(req); err != nil {
 		return err
+	} else {
+		return c.executeProcessResult(res, parser)
 	}
+}
+
+func (c *Client) executeProcessResult(res *http.Response, parser func(io.Reader) error) error {
+	var err error
 	if c.apilog != nil && res.StatusCode == 200 {
 		// If we want API logging output, read the response body, print it, and recreate the buffer
 		// for the parser to decode
@@ -170,7 +184,12 @@ func (c *Client) executeGet(apiUrl string, parser func(io.Reader) error) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode == 200 {
-		err = parser(res.Body)
+		if parser != nil {
+			err = parser(res.Body)
+		}
+		return err
+	} else if res.StatusCode >= 201 && res.StatusCode <= 299 {
+		return nil
 	} else {
 		var mserr msGraphError
 		if err = json.NewDecoder(res.Body).Decode(&mserr); err == nil {
@@ -182,7 +201,6 @@ func (c *Client) executeGet(apiUrl string, parser func(io.Reader) error) error {
 		}
 		return errors.New(res.Status)
 	}
-	return err
 }
 
 func NewKeyClient(ctx context.Context, TenantID string, ClientID string, ClientKey string) (*Client, error) {
@@ -194,7 +212,7 @@ func NewKeyClient(ctx context.Context, TenantID string, ClientID string, ClientK
 	c.oauthConfig.Scopes = append(c.oauthConfig.Scopes, "https://graph.microsoft.com/.default")
 	c.oauthConfig.AuthStyle = oauth2.AuthStyleInParams
 	c.parentCtx = ctx
-	c.callTimeout = time.Second * 15
+	c.callTimeout = time.Second * 180
 	return c, nil
 }
 
