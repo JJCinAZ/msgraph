@@ -7,12 +7,14 @@ import (
 	"time"
 )
 
+type EmailAddress struct {
+	//OdataType string `json:"@odata.type"`
+	Address string `json:"address"`
+	Name    string `json:"name"`
+}
+
 type Recipient struct {
-	EmailAddress struct {
-		//OdataType string `json:"@odata.type"`
-		Address string `json:"address"`
-		Name    string `json:"name"`
-	} `json:"emailAddress"`
+	EmailAddress EmailAddress `json:"emailAddress"`
 }
 
 type ItemBody struct {
