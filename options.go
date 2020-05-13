@@ -6,6 +6,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
+)
+
+const (
+	ISO8601 = "2006-01-02T15:04:05-07:00"
 )
 
 type ApiOption interface{}
@@ -32,6 +37,40 @@ type optMax struct {
 }
 
 type optTextMailBody struct {
+}
+
+type optStartDateTime struct {
+	when time.Time
+}
+
+type optEndDateTime struct {
+	when time.Time
+}
+
+func OptionStartDateTime(i interface{}) ApiOption {
+	t := time.Now()
+	switch x := i.(type) {
+	case time.Time:
+		t = x
+	case string:
+		if temp, err := time.Parse(time.RFC3339, x); err == nil {
+			t = temp
+		}
+	}
+	return optStartDateTime{when: t}
+}
+
+func OptionEndDateTime(i interface{}) ApiOption {
+	t := time.Now()
+	switch x := i.(type) {
+	case time.Time:
+		t = x
+	case string:
+		if temp, err := time.Parse(time.RFC3339, x); err == nil {
+			t = temp
+		}
+	}
+	return optEndDateTime{when: t}
 }
 
 func OptionPageSize(n int) ApiOption {
@@ -119,6 +158,10 @@ func formatOptions(apiUrl string, options []ApiOption) (string, error) {
 			params.Add("$filter", x.filter)
 		case optPageSize:
 			params.Add("top", strconv.Itoa(x.n))
+		case optStartDateTime:
+			params.Add("startDateTime", x.when.Format(ISO8601))
+		case optEndDateTime:
+			params.Add("endDateTime", x.when.Format(ISO8601))
 		}
 	}
 	if nSel > 0 {
