@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"golang.org/x/oauth2/microsoft"
 	"io"
 	"io/ioutil"
 	"log"
@@ -19,14 +20,22 @@ import (
 
 const (
 	AuthTypeClientKey = iota
+	AuthTypeAuthCode
 )
 
 type Client struct {
 	authType    int
-	oauthConfig clientcredentials.Config
+	OauthConfig oauth2.Config
+	token       *oauth2.Token
+	ccConfig    clientcredentials.Config
 	parentCtx   context.Context
 	callTimeout time.Duration
 	apilog      *log.Logger
+}
+
+type TokenCache interface {
+	Load(c *Client) (*oauth2.Token, error)
+	Save(c *Client, token *oauth2.Token) error
 }
 
 type MsGraphError struct {
@@ -55,7 +64,10 @@ func (e *MsGraphError) StatusCode() int {
 }
 
 func (c *Client) getHttpClient(ctx context.Context) *http.Client {
-	return c.oauthConfig.Client(ctx)
+	if c.authType == AuthTypeClientKey {
+		return c.ccConfig.Client(ctx)
+	}
+	return c.OauthConfig.Client(ctx, c.token)
 }
 
 // GetList is specialized in that we get back paged results from MSGraph API
@@ -203,19 +215,6 @@ func (c *Client) executeProcessResult(res *http.Response, parser func(io.Reader)
 	}
 }
 
-func NewKeyClient(ctx context.Context, TenantID string, ClientID string, ClientKey string) (*Client, error) {
-	c := new(Client)
-	c.authType = AuthTypeClientKey
-	c.oauthConfig.ClientID = ClientID
-	c.oauthConfig.ClientSecret = ClientKey
-	c.oauthConfig.TokenURL = "https://login.microsoftonline.com/" + TenantID + "/oauth2/v2.0/token"
-	c.oauthConfig.Scopes = append(c.oauthConfig.Scopes, "https://graph.microsoft.com/.default")
-	c.oauthConfig.AuthStyle = oauth2.AuthStyleInParams
-	c.parentCtx = ctx
-	c.callTimeout = time.Second * 180
-	return c, nil
-}
-
 func (c *Client) SetAPILogging(logger *log.Logger) {
 	c.apilog = logger
 }
@@ -227,4 +226,69 @@ func (c *Client) SetTimeout(timeout time.Duration) {
 }
 
 func (c *Client) Close() {
+}
+
+// Creates a new MSGraph API Client using the Client Credentials Grant flow [see https://oauth.net/2/grant-types/client-credentials/]
+// One needs to create the Client ID and Key in Azure AD prior to calling this.
+// All permissions must be added to the Configured Permissions in the App Registration within Azure AD console
+// [see https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#the-default-scope]
+func NewKeyClient(ctx context.Context, TenantID string, ClientID string, ClientKey string) (*Client, error) {
+	c := new(Client)
+	c.authType = AuthTypeClientKey
+	c.ccConfig.ClientID = ClientID
+	c.ccConfig.ClientSecret = ClientKey
+	c.ccConfig.TokenURL = "https://login.microsoftonline.com/" + TenantID + "/oauth2/v2.0/token"
+	c.ccConfig.Scopes = append(c.ccConfig.Scopes, "https://graph.microsoft.com/.default")
+	c.ccConfig.AuthStyle = oauth2.AuthStyleInParams
+	c.parentCtx = ctx
+	c.callTimeout = time.Second * 180
+	return c, nil
+}
+
+// Create a new MSGraph API Client using the Authorization Code Grant flow [see https://oauth.net/2/grant-types/authorization-code/]
+// One needs to create the Client ID and Secret in Azure AD prior to calling this.
+// One or more scopes must be supplied to indicate the type of access being requested.
+func NewClient(ctx context.Context, TenantID string, ClientID string, ClientSecret string, scopes []string,
+	cache TokenCache, timeout time.Duration) (*Client, error) {
+	var (
+		state string
+		err   error
+	)
+	c := new(Client)
+	c.authType = AuthTypeAuthCode
+	c.OauthConfig.ClientID = ClientID
+	c.OauthConfig.ClientSecret = ClientSecret
+	c.OauthConfig.Endpoint = microsoft.AzureADEndpoint(TenantID)
+	c.OauthConfig.Scopes = append(c.ccConfig.Scopes, "offline_access")
+	c.OauthConfig.Scopes = append(c.ccConfig.Scopes, scopes...)
+	c.parentCtx = ctx
+	c.callTimeout = time.Second * 180
+
+	// Load any token which was previously cached
+	if cache == nil {
+		cache = NullCache{}
+	}
+	c.token, err = cache.Load(c)
+	if err == nil {
+		return c, nil
+	}
+
+	state, err = generateNonce(16)
+	if err == nil {
+		err = openUrl(c.OauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline))
+	}
+	if err != nil {
+		return nil, err
+	}
+	cbChan := c.startCallbackServer(ctx, state, timeout)
+	cb := <-cbChan
+	if cb.err != nil {
+		return nil, cb.err
+	}
+	c.token, err = c.OauthConfig.Exchange(ctx, cb.code)
+	if err != nil {
+		return nil, err
+	}
+	err = cache.Save(c, c.token)
+	return c, nil
 }
