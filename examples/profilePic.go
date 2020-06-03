@@ -4,14 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/jjcinaz/msgraph"
+	"github.com/jjcinaz/msgraph/examples/console"
+	filecache "github.com/jjcinaz/msgraph/filecache"
 	"github.com/qeesung/image2ascii/convert"
 	"image"
 	"log"
 	"os"
 	"time"
-
-	"github.com/jjcinaz/msgraph"
-	filecache "github.com/jjcinaz/msgraph/filecache"
 )
 
 func main() {
@@ -51,13 +51,23 @@ func main() {
 
 func asciiProfilePhoto(c *msgraph.Client, id string) {
 	var (
-		err error
-		img image.Image
+		err  error
+		w, h int
+		img  image.Image
 	)
+	w, h, err = console.InitConsole()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	img, _, err = c.GetUserPhoto(id)
 	if err == nil {
 		converter := convert.NewImageConverter()
-		fmt.Print(converter.Image2ASCIIString(img, &convert.DefaultOptions))
+		fmt.Print(converter.Image2ASCIIString(img, &convert.Options{
+			FixedWidth:  w,
+			FixedHeight: h,
+			Colored:     true,
+		}))
 	} else {
 		fmt.Println(err)
 	}
