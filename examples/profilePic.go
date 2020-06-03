@@ -32,7 +32,7 @@ func main() {
 		fmt.Println("Missing environment variable AZURE_CLIENTID")
 	}
 	if len(clientsecret) == 0 {
-		fmt.Println("Missing environment variable AZURE_CLIENTKEY")
+		fmt.Println("Missing environment variable AZURE_CLIENTSECRET")
 	}
 	flag.StringVar(&userid, "u", "", "User Id or User Principal Name (email)")
 	flag.BoolVar(&debugmode, "debug", false, "enable debug mode")
