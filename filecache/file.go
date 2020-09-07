@@ -31,6 +31,13 @@ func (fc *FileCache) Load(c *msgraph.Client) (*oauth2.Token, error) {
 	}
 	t := new(oauth2.Token)
 	err = gob.NewDecoder(f).Decode(t)
+	if err == nil {
+		if !t.Valid() {
+			_ = os.Remove(file)
+			t = nil
+			err = os.ErrNotExist
+		}
+	}
 	return t, err
 }
 
