@@ -248,6 +248,8 @@ func NewKeyClient(ctx context.Context, TenantID string, ClientID string, ClientK
 // Create a new MSGraph API Client using the Authorization Code Grant flow [see https://oauth.net/2/grant-types/authorization-code/]
 // One needs to create the Client ID and Secret in Azure AD prior to calling this.
 // One or more scopes must be supplied to indicate the type of access being requested.
+// This authentication flow launches a web browser for the OAuth2 work with a callback to
+// a web server at localhost:8001.
 func NewClient(ctx context.Context, TenantID string, ClientID string, ClientSecret string, scopes []string,
 	cache TokenCache, timeout time.Duration) (*Client, error) {
 	var (
@@ -272,7 +274,6 @@ func NewClient(ctx context.Context, TenantID string, ClientID string, ClientSecr
 	if err == nil {
 		return c, nil
 	}
-
 	state, err = generateNonce(16)
 	if err == nil {
 		err = openUrl(c.OauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline))

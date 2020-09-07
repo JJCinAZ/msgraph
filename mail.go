@@ -70,14 +70,101 @@ type Message struct {
 	WebLink                    string                  `json:"webLink,omitempty"`
 }
 
-func (c *Client) ListMessages(upn string, options ...ApiOption) ([]Message, error) {
-	var (
-		err error
-	)
+type MailFolder struct {
+	ChildFolderCount              int                       `json:"childFolderCount"`
+	DisplayName                   string                    `json:"displayName"`
+	ID                            string                    `json:"id"`
+	ParentFolderID                string                    `json:"parentFolderId"`
+	TotalItemCount                int                       `json:"totalItemCount"`
+	UnreadItemCount               int                       `json:"unreadItemCount"`
+	WellKnownName                 string                    `json:"wellKnownName"`
+	ChildFolders                  []MailFolder              `json:"childFolders"`
+	MessageRules                  []MessageRule             `json:"messageRules"`
+	Messages                      []Message                 `json:"messages"`
+	MultiValueExtendedProperties  []MultiValueExtendedProp  `json:"multiValueExtendedProperties"`
+	SingleValueExtendedProperties []SingleValueExtendedProp `json:"singleValueExtendedProperties"`
+}
 
-	apiUrl, err := formatOptions("https://graph.microsoft.com/v1.0/users/"+url.PathEscape(upn)+"/messages",
-		options)
-	if err != nil {
+type MessageRule struct {
+	Actions     MessageRuleActions    `json:"actions"`
+	Conditions  MessageRulePredicates `json:"conditions"`
+	DisplayName string                `json:"displayName"`
+	Exceptions  MessageRulePredicates `json:"exceptions"`
+	HasError    bool                  `json:"hasError"`
+	ID          string                `json:"id"`
+	IsEnabled   bool                  `json:"isEnabled"`
+	IsReadOnly  bool                  `json:"isReadOnly"`
+	Sequence    int                   `json:"sequence"`
+}
+
+type MessageRuleActions struct {
+	AssignCategories      []string    `json:"assignCategories"`
+	CopyToFolder          string      `json:"copyToFolder"`
+	Delete                bool        `json:"delete"`
+	ForwardAsAttachmentTo []Recipient `json:"forwardAsAttachmentTo"`
+	ForwardTo             []Recipient `json:"forwardTo"`
+	MarkAsRead            bool        `json:"markAsRead"`
+	MarkImportance        string      `json:"markImportance"`
+	MoveToFolder          string      `json:"moveToFolder"`
+	PermanentDelete       bool        `json:"permanentDelete"`
+	RedirectTo            []Recipient `json:"redirectTo"`
+	StopProcessingRules   bool        `json:"stopProcessingRules"`
+}
+
+type MessageRulePredicates struct {
+	BodyContains           []string    `json:"bodyContains"`
+	BodyOrSubjectContains  []string    `json:"bodyOrSubjectContains"`
+	Categories             []string    `json:"categories"`
+	FromAddresses          []Recipient `json:"fromAddresses"`
+	HasAttachments         bool        `json:"hasAttachments"`
+	HeaderContains         []string    `json:"headerContains"`
+	Importance             string      `json:"importance"`
+	IsApprovalRequest      bool        `json:"isApprovalRequest"`
+	IsAutomaticForward     bool        `json:"isAutomaticForward"`
+	IsAutomaticReply       bool        `json:"isAutomaticReply"`
+	IsEncrypted            bool        `json:"isEncrypted"`
+	IsMeetingRequest       bool        `json:"isMeetingRequest"`
+	IsMeetingResponse      bool        `json:"isMeetingResponse"`
+	IsNonDeliveryReport    bool        `json:"isNonDeliveryReport"`
+	IsPermissionControlled bool        `json:"isPermissionControlled"`
+	IsReadReceipt          bool        `json:"isReadReceipt"`
+	IsSigned               bool        `json:"isSigned"`
+	IsVoicemail            bool        `json:"isVoicemail"`
+	MessageActionFlag      string      `json:"messageActionFlag"`
+	NotSentToMe            bool        `json:"notSentToMe"`
+	RecipientContains      []string    `json:"recipientContains"`
+	SenderContains         []string    `json:"senderContains"`
+	Sensitivity            string      `json:"sensitivity"`
+	SentCcMe               bool        `json:"sentCcMe"`
+	SentOnlyToMe           bool        `json:"sentOnlyToMe"`
+	SentToAddresses        []Recipient `json:"sentToAddresses"`
+	SentToMe               bool        `json:"sentToMe"`
+	SentToOrCcMe           bool        `json:"sentToOrCcMe"`
+	SubjectContains        []string    `json:"subjectContains"`
+	WithinSizeRange        SizeRange   `json:"withinSizeRange"`
+}
+
+type SizeRange struct {
+	MaximumSize int `json:"maximumSize"`
+	MinimumSize int `json:"minimumSize"`
+}
+
+func (c *Client) ListMessages(upn string, options ...ApiOption) ([]Message, error) {
+	return c.ListMessagesInFolder(upn, "", options...)
+}
+
+func (c *Client) ListMessagesInFolder(upn string, folderId string, options ...ApiOption) ([]Message, error) {
+	var (
+		err    error
+		apiUrl string
+	)
+	url := "https://graph.microsoft.com/v1.0/users/" + url.PathEscape(upn)
+	if len(folderId) == 0 {
+		url = url + "/messages"
+	} else {
+		url = url + "/mailFolders/" + folderId + "messages"
+	}
+	if apiUrl, err = formatOptions(url, options); err != nil {
 		return nil, err
 	}
 	max, count := getMaxItemOption(options), 0
